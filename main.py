@@ -1,7 +1,18 @@
 import streamlit as st
-import google.generativeai as genai
+import openai
 from datetime import datetime, date
-import json
+import json# main.pyの先頭付近に追加
+from dotenv import load_dotenv
+import os
+
+# .envファイルの読み込み
+load_dotenv()
+
+# 環境変数の取得
+api_key = os.getenv("OPENAI_API_KEY")
+if not api_key:
+    st.error("❌ OPENAI_API_KEYが設定されていません。環境変数を設定してください。")
+    st.stop()
 import os
 from typing import List, Dict, Optional
 from urllib.parse import urlparse
@@ -84,24 +95,41 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-class GeminiService:
+class OpenAIService:
     def __init__(self, api_key: str):
-        genai.configure(api_key=api_key)
-        self.model = genai.GenerativeModel('gemini-pro')
+        openai.api_key = api_key
+        self.client = openai.OpenAI(api_key=api_key)
     
     def analyze_tone(self, prompt: str) -> str:
         """トーン＆マナーを分析"""
         try:
-            response = self.model.generate_content(prompt)
-            return response.text.strip()
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "あなたはSNSマーケティングの専門家です。与えられたSNSアカウントURLから、そのアカウントに適したトーン＆マナーを分析してください。"},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=500,
+                temperature=0.7
+            )
+            return response.choices[0].message.content.strip()
         except Exception as e:
             raise Exception(f"トーン分析エラー: {str(e)}")
     
     def generate_posts(self, prompt: str) -> List[Dict[str, str]]:
         """投稿を生成"""
         try:
-            response = self.model.generate_content(prompt)
-            response_text = response.text.strip()
+            response = self.client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "あなたはプロのSNSコンテンツクリエーターです。指定された形式で6種類のSNS投稿文案をJSON形式で生成してください。必ずJSON形式で返答してください。"},
+                    {"role": "user", "content": prompt}
+                ],
+                max_tokens=2000,
+                temperature=0.8
+            )
+            
+            response_text = response.choices[0].message.content.strip()
             
             # JSONの抽出
             if "```json" in response_text:
@@ -158,9 +186,9 @@ def main():
     st.markdown('<p class="sub-header">AIがあなたのアカウントの雰囲気に合わせてSNS投稿を複数パターン作成します。</p>', unsafe_allow_html=True)
     
     # APIキーの設定
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        st.error("❌ GEMINI_API_KEYが設定されていません。環境変数を設定してください。")
+        st.error("❌ OPENAI_API_KEYが設定されていません。環境変数を設定してください。")
         st.stop()
     
     # セッション状態の初期化
@@ -218,14 +246,14 @@ def main():
         
         # 生成処理
         try:
-            gemini_service = GeminiService(api_key)
+            openai_service = OpenAIService(api_key)
             
             with st.spinner('投稿を生成中...'):
                 # Step 1: トーン＆マナー分析
                 st.info("🔍 トーン＆マナーを分析中...")
                 tone_prompt = f"""以下のSNSアカウントURLに基づき、その投稿にふさわしいと考えられるトーン＆マナーを簡潔に説明してください。例：企業アカウントであればプロフェッショナルで情報提供型、個人ブログであればカジュアルで思索的、など。URL: {sns_url}"""
                 
-                analyzed_tone = gemini_service.analyze_tone(tone_prompt)
+                analyzed_tone = openai_service.analyze_tone(tone_prompt)
                 st.session_state.analyzed_tone = analyzed_tone
                 
                 # Step 2: 投稿生成
@@ -285,7 +313,7 @@ def main():
                 ])
                 
                 post_generation_prompt = '\n'.join(post_generation_parts)
-                generated_posts = gemini_service.generate_posts(post_generation_prompt)
+                generated_posts = openai_service.generate_posts(post_generation_prompt)
                 st.session_state.generated_posts = generated_posts
                 
                 st.success("✅ 投稿の生成が完了しました！")
