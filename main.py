@@ -1,9 +1,11 @@
 import streamlit as st
 import openai
 from datetime import datetime, date
-import json# main.pyの先頭付近に追加
+import json
 from dotenv import load_dotenv
 import os
+from typing import List, Dict, Optional
+from urllib.parse import urlparse
 
 # .envファイルの読み込み
 load_dotenv()
@@ -13,9 +15,6 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     st.error("❌ OPENAI_API_KEYが設定されていません。環境変数を設定してください。")
     st.stop()
-import os
-from typing import List, Dict, Optional
-from urllib.parse import urlparse
 
 # ページ設定
 st.set_page_config(
@@ -25,74 +24,315 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# カスタムCSS
+# カスタムCSS - ダークテーマで知的なデザイン
 st.markdown("""
 <style>
+    /* ベースカラー設定 */
+    :root {
+        --primary-color: #4f46e5;
+        --primary-hover: #4338ca;
+        --secondary-color: #6366f1;
+        --accent-color: #10b981;
+        --bg-primary: #0f172a;
+        --bg-secondary: #1e293b;
+        --bg-tertiary: #334155;
+        --surface: #475569;
+        --text-primary: #f8fafc;
+        --text-secondary: #cbd5e1;
+        --text-muted: #94a3b8;
+        --border-color: #475569;
+        --success: #10b981;
+        --warning: #f59e0b;
+        --error: #ef4444;
+    }
+
+    /* 全体のベース設定 */
+    .stApp {
+        background: linear-gradient(135deg, var(--bg-primary) 0%, #1a202c 100%);
+        color: var(--text-primary);
+    }
+
+    /* メインコンテナ */
+    .main .block-container {
+        padding-top: 3rem;
+        padding-bottom: 3rem;
+        max-width: 1200px;
+    }
+
+    /* ヘッダー */
     .main-header {
         text-align: center;
-        padding: 2rem 0;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 3rem 0 2rem 0;
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 50%, var(--accent-color) 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         background-clip: text;
-        font-size: 2.5rem;
-        font-weight: bold;
+        font-size: 3.5rem;
+        font-weight: 800;
         margin-bottom: 1rem;
+        letter-spacing: -0.02em;
     }
     
     .sub-header {
         text-align: center;
-        color: #888;
-        margin-bottom: 2rem;
+        color: var(--text-secondary);
+        font-size: 1.2rem;
+        margin-bottom: 3rem;
+        font-weight: 300;
     }
-    
+
+    /* 入力フォーム */
+    .stTextInput > div > div > input {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 16px;
+        transition: all 0.3s ease;
+    }
+
+    .stTextInput > div > div > input:focus {
+        border-color: var(--primary-color);
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+    }
+
+    .stSelectbox > div > div > div {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+    }
+
+    .stTextArea textarea {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 16px;
+    }
+
+    .stDateInput > div > div > input {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border: 2px solid var(--border-color);
+        border-radius: 12px;
+    }
+
+    /* ボタン */
+    .stButton > button {
+        background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        padding: 16px 32px;
+        font-size: 18px;
+        font-weight: 600;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 20px rgba(79, 70, 229, 0.3);
+    }
+
+    .stButton > button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 30px rgba(79, 70, 229, 0.4);
+    }
+
+    /* トーン表示 */
     .tone-display {
-        background: rgba(103, 126, 234, 0.1);
-        border-left: 4px solid #667eea;
-        padding: 1rem;
-        margin: 1rem 0;
-        border-radius: 0 8px 8px 0;
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        border-left: 4px solid var(--primary-color);
+        padding: 2rem;
+        margin: 2rem 0;
+        border-radius: 0 16px 16px 0;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
     }
     
+    .tone-display strong {
+        color: var(--primary-color);
+        font-weight: 700;
+    }
+
+    /* 投稿カード */
     .post-card {
-        border: 1px solid #e0e0e0;
-        border-radius: 8px;
-        padding: 1.5rem;
-        margin: 1rem 0;
-        background: #fafafa;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 2rem;
+        margin: 1.5rem 0;
+        backdrop-filter: blur(10px);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+        transition: all 0.3s ease;
+    }
+
+    .post-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3);
+        border-color: var(--primary-color);
     }
     
     .post-title {
-        color: #667eea;
-        font-weight: bold;
-        font-size: 1.1rem;
-        margin-bottom: 0.5rem;
+        color: var(--primary-color);
+        font-weight: 700;
+        font-size: 1.2rem;
+        margin-bottom: 1rem;
     }
     
     .post-content {
-        line-height: 1.6;
-        color: #333;
+        line-height: 1.8;
+        color: var(--text-primary);
+        font-size: 16px;
+        white-space: pre-wrap;
+        background: var(--bg-primary);
+        padding: 1.5rem;
+        border-radius: 12px;
+        border-left: 3px solid var(--accent-color);
     }
-    
-    .error-box {
-        background: #fee;
-        border: 1px solid #fcc;
-        color: #c33;
-        padding: 1rem;
+
+    /* コピーボタン */
+    .copy-button {
+        background: linear-gradient(135deg, var(--accent-color) 0%, #059669 100%);
+        color: white;
+        border: none;
         border-radius: 8px;
-        margin: 1rem 0;
+        padding: 8px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 10px rgba(16, 185, 129, 0.3);
     }
-    
+
+    .copy-button:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 20px rgba(16, 185, 129, 0.4);
+    }
+
+    .copy-button:active {
+        transform: translateY(0);
+    }
+
+    /* Expander */
+    .streamlit-expanderHeader {
+        background-color: var(--bg-secondary);
+        color: var(--text-primary);
+        border-radius: 12px;
+        padding: 1rem;
+        font-weight: 600;
+    }
+
+    .streamlit-expanderContent {
+        background-color: var(--bg-secondary);
+        border-radius: 0 0 12px 12px;
+        padding: 0 1rem 1rem 1rem;
+    }
+
+    /* アラート */
+    .stAlert {
+        background-color: var(--bg-secondary);
+        border-radius: 12px;
+        border-left: 4px solid var(--primary-color);
+    }
+
+    .stSuccess {
+        border-left-color: var(--success);
+    }
+
+    .stError {
+        border-left-color: var(--error);
+    }
+
+    .stWarning {
+        border-left-color: var(--warning);
+    }
+
+    /* スピナー */
+    .stSpinner {
+        color: var(--primary-color);
+    }
+
+    /* フッター */
     .footer-note {
         text-align: center;
-        color: #888;
-        font-size: 0.8rem;
-        margin-top: 2rem;
-        padding-top: 1rem;
-        border-top: 1px solid #eee;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid var(--border-color);
+        font-style: italic;
+    }
+
+    /* ラベル */
+    .stTextInput label, .stSelectbox label, .stTextArea label, .stDateInput label {
+        color: var(--text-primary);
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+
+    /* ヘルプテキスト */
+    .stTextInput .help, .stSelectbox .help, .stTextArea .help, .stDateInput .help {
+        color: var(--text-muted);
+        font-size: 0.85rem;
+    }
+
+    /* コードブロック */
+    .stCode {
+        background-color: var(--bg-primary);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+    }
+
+    /* 成功メッセージのアニメーション */
+    @keyframes fadeInUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    .fade-in {
+        animation: fadeInUp 0.5s ease-out;
+    }
+
+    /* コピー成功アニメーション */
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
+    }
+
+    .copy-success {
+        animation: pulse 0.3s ease-in-out;
+        background: linear-gradient(135deg, var(--success) 0%, #059669 100%) !important;
     }
 </style>
+
+<script>
+// クリップボードにコピーする関数
+function copyToClipboard(text, buttonId) {
+    navigator.clipboard.writeText(text).then(function() {
+        // ボタンのテキストを一時的に変更
+        const button = document.getElementById(buttonId);
+        const originalText = button.innerHTML;
+        button.innerHTML = '✅ コピー完了!';
+        button.classList.add('copy-success');
+        
+        // 2秒後に元に戻す
+        setTimeout(function() {
+            button.innerHTML = originalText;
+            button.classList.remove('copy-success');
+        }, 2000);
+    }).catch(function(err) {
+        console.error('コピーに失敗しました: ', err);
+        alert('コピーに失敗しました。手動でコピーしてください。');
+    });
+}
+</script>
 """, unsafe_allow_html=True)
 
 class OpenAIService:
@@ -163,10 +403,10 @@ def validate_url(url: str) -> bool:
 def get_media_type_label(media_type: str) -> str:
     """メディアタイプのラベルを取得"""
     labels = {
-        "X": "X (Twitter)",
-        "Facebook": "Facebook",
-        "Instagram": "Instagram", 
-        "LinkedIn": "LinkedIn"
+        "X": "𝕏 (Twitter)",
+        "Facebook": "📘 Facebook",
+        "Instagram": "📸 Instagram", 
+        "LinkedIn": "💼 LinkedIn"
     }
     return labels.get(media_type, media_type)
 
@@ -180,10 +420,23 @@ def get_character_limit(media_type: str) -> str:
     }
     return limits.get(media_type, "400文字以内")
 
+def create_copy_button(content: str, button_id: str) -> str:
+    """コピーボタンのHTMLを生成"""
+    escaped_content = content.replace('"', '&quot;').replace("'", "\\'").replace('\n', '\\n')
+    return f"""
+    <button 
+        id="{button_id}" 
+        class="copy-button" 
+        onclick="copyToClipboard('{escaped_content}', '{button_id}')"
+    >
+        📋 コピー
+    </button>
+    """
+
 def main():
     # メインヘッダー
     st.markdown('<h1 class="main-header">SNS投稿ジェネレーター AI</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="sub-header">AIがあなたのアカウントの雰囲気に合わせてSNS投稿を複数パターン作成します。</p>', unsafe_allow_html=True)
+    st.markdown('<p class="sub-header">🤖 AIがあなたのアカウントの雰囲気に合わせて、魅力的なSNS投稿を複数パターン作成します</p>', unsafe_allow_html=True)
     
     # APIキーの設定
     api_key = os.getenv("OPENAI_API_KEY")
@@ -201,18 +454,20 @@ def main():
     
     # 入力フォーム
     with st.container():
+        st.markdown("### 📝 基本情報を入力してください")
+        
         col1, col2 = st.columns([2, 1])
         
         with col1:
             sns_url = st.text_input(
-                "SNSアカウントURL *",
+                "🔗 SNSアカウントURL *",
                 placeholder="例: https://twitter.com/account",
                 help="分析したいSNSアカウントのURLを入力してください"
             )
         
         with col2:
             media_type = st.selectbox(
-                "媒体の種類 *",
+                "📱 投稿媒体 *",
                 options=["X", "Facebook", "Instagram", "LinkedIn"],
                 format_func=get_media_type_label
             )
@@ -221,14 +476,14 @@ def main():
     
     with col3:
         selected_date = st.date_input(
-            "投稿予定日 *",
+            "📅 投稿予定日 *",
             min_value=date.today(),
             help="投稿を予定している日付を選択してください"
         )
     
     with col4:
         user_request = st.text_area(
-            "追加の要望（任意）",
+            "💡 追加の要望（任意）",
             placeholder="特別な要望があれば入力してください（キャンペーン情報、トーンの調整など）",
             height=100
         )
@@ -248,7 +503,7 @@ def main():
         try:
             openai_service = OpenAIService(api_key)
             
-            with st.spinner('投稿を生成中...'):
+            with st.spinner('🧠 AIが投稿を生成中...'):
                 # Step 1: トーン＆マナー分析
                 st.info("🔍 トーン＆マナーを分析中...")
                 tone_prompt = f"""以下のSNSアカウントURLに基づき、その投稿にふさわしいと考えられるトーン＆マナーを簡潔に説明してください。例：企業アカウントであればプロフェッショナルで情報提供型、個人ブログであればカジュアルで思索的、など。URL: {sns_url}"""
@@ -324,24 +579,28 @@ def main():
     # 結果表示
     if st.session_state.analyzed_tone:
         st.markdown("### 🎯 認識されたトーン＆マナー")
-        st.markdown(f'<div class="tone-display"><strong>分析結果:</strong> {st.session_state.analyzed_tone}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="tone-display fade-in"><strong>🧠 AI分析結果:</strong><br>{st.session_state.analyzed_tone}</div>', unsafe_allow_html=True)
     
     if st.session_state.generated_posts:
         st.markdown("### 📝 生成された投稿文案")
+        st.markdown('<div class="fade-in">', unsafe_allow_html=True)
         
         for i, post in enumerate(st.session_state.generated_posts):
-            with st.expander(f"{post['title']}", expanded=True):
-                st.markdown(f'<div class="post-content">{post["content"]}</div>', unsafe_allow_html=True)
+            with st.expander(f"📄 {post['title']}", expanded=True):
+                col1, col2 = st.columns([4, 1])
                 
-                # コピーボタン
-                col1, col2 = st.columns([3, 1])
+                with col1:
+                    st.markdown(f'<div class="post-content">{post["content"]}</div>', unsafe_allow_html=True)
+                
                 with col2:
-                    if st.button(f"📋 コピー", key=f"copy_{i}", help="投稿内容をクリップボードにコピー"):
-                        st.write("コピーしました！")
-                        st.code(post["content"], language=None)
+                    # JavaScriptを使った改良されたコピーボタン
+                    copy_button_html = create_copy_button(post["content"], f"copy_btn_{i}")
+                    st.markdown(copy_button_html, unsafe_allow_html=True)
+        
+        st.markdown('</div>', unsafe_allow_html=True)
     
     # フッター
-    st.markdown('<div class="footer-note">AIによる生成コンテンツです。必ず内容を確認・調整してください。</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer-note">⚡ Powered by AI - 生成されたコンテンツは必ず内容を確認・調整してからご利用ください</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
